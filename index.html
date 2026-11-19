@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Daily Task Tracker</title>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<style>
+:root{--blue:#2457d6;--blue2:#eaf0ff;--ink:#172033;--muted:#687386;--line:#e5e9f0;--bg:#f5f7fb;--white:#fff;--red:#c93636}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 Inter,system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif}
+header{background:var(--white);border-bottom:1px solid var(--line);padding:20px 5vw;display:flex;align-items:center;justify-content:space-between;gap:16px}
+.brand{font-size:20px;font-weight:750;letter-spacing:-.4px}.brand span{color:var(--blue)}.sub{color:var(--muted);font-size:13px}
+main{max-width:1100px;margin:30px auto;padding:0 20px}.grid{display:grid;grid-template-columns: minmax(280px,350px) 1fr;gap:22px;align-items:start}
+.card{background:var(--white);border:1px solid var(--line);border-radius:15px;padding:22px;box-shadow:0 5px 20px rgba(20,35,70,.035)}
+h1{font-size:25px;margin:0 0 5px;letter-spacing:-.6px}h2{font-size:17px;margin:0 0 16px}.muted{color:var(--muted)}label{display:block;font-weight:650;font-size:13px;margin:16px 0 7px}
+input,textarea,select{width:100%;border:1px solid #d8deea;border-radius:9px;padding:11px 12px;font:inherit;color:var(--ink);background:#fff;outline:none}
+input:focus,textarea:focus,select:focus{border-color:var(--blue);box-shadow:0 0 0 3px rgba(36,87,214,.1)}
+textarea{min-height:120px;resize:vertical}button,.filebtn{border:0;border-radius:9px;padding:10px 14px;font:650 14px inherit;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:7px}
+.primary{background:var(--blue);color:#fff;width:100%;margin-top:16px;padding:12px}.secondary{background:var(--blue2);color:var(--blue)}.ghost{background:#f1f3f7;color:#344054}.danger{background:#fff0f0;color:var(--red)}
+button:hover,.filebtn:hover{filter:brightness(.97)}.toolbar{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}
+.stats{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:18px}.stat{padding:13px;border:1px solid var(--line);border-radius:11px}.stat strong{font-size:23px;display:block}.stat small{color:var(--muted)}
+.filters{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:15px 0}.filters label{margin:0 0 6px}.actions{display:flex;gap:8px;flex-wrap:wrap;margin:12px 0 16px}
+.day{font-weight:750;font-size:14px;padding:12px 0 7px;border-bottom:1px solid var(--line);margin-top:8px}
+.task{display:flex;justify-content:space-between;gap:12px;padding:13px 0;border-bottom:1px solid #edf0f5}.task:last-child{border-bottom:0}.tasktext{white-space:pre-wrap;overflow-wrap:anywhere}.taskdate{font-size:12px;color:var(--muted);margin-bottom:3px}.taskbuttons{display:flex;gap:6px;flex-shrink:0}.taskbuttons button{padding:6px 9px;font-size:12px}
+.empty{text-align:center;color:var(--muted);padding:35px 10px}.notice{font-size:12px;color:var(--muted);margin-top:12px}.hidden{display:none!important}
+footer{text-align:center;color:var(--muted);font-size:12px;padding:25px}
+@media(max-width:760px){.grid{grid-template-columns:1fr}header{padding:16px 20px}.filters{grid-template-columns:1fr}.task{flex-direction:column}.taskbuttons{align-self:flex-end}}
+@media print{body{background:#fff}header,.entry,.toolbar,.filters,.actions,.taskbuttons,footer,.stats{display:none!important}main{margin:0;max-width:none;padding:0}.card{border:0;box-shadow:none;padding:0}.grid{display:block}.task{break-inside:avoid}}
+</style>
+</head>
+<body>
+<header>
+  <div><div class="brand">Daily <span>Task Tracker</span></div><div class="sub">A simple daily work activity log</div></div>
+  <div class="sub" id="todayLabel"></div>
+</header>
+<main>
+  <div class="grid">
+    <section class="card entry">
+      <h2 id="formTitle">Add a task</h2>
+      <form id="taskForm">
+        <label for="taskDate">Date</label>
+        <input id="taskDate" type="date" required>
+        <label for="taskText">Task &amp; Client Name</label>
+        <textarea id="taskText" placeholder="Example: Meeting with LT. Raterta regarding the GomSpace presentation." required maxlength="5000"></textarea>
+        <button class="primary" type="submit" id="saveButton">＋ Save task</button>
+        <button class="ghost hidden" type="button" id="cancelEdit" style="width:100%;margin-top:8px">Cancel editing</button>
+      </form>
+      <div class="notice">Tip: Press Ctrl + Enter while writing to save quickly. Tasks are saved in this browser on this device.</div>
+    </section>
+
+    <section class="card">
+      <h1>Activity history</h1>
+      <div class="muted" style="margin-bottom:17px">Record each activity as you complete it. Your entries are grouped by date automatically.</div>
+      <div class="stats">
+        <div class="stat"><strong id="todayCount">0</strong><small>Tasks today</small></div>
+        <div class="stat"><strong id="periodCount">0</strong><small>Tasks in selected period</small></div>
+      </div>
+      <div class="filters">
+        <div><label for="periodPreset">Payroll period</label><select id="periodPreset">
+          <option value="all">All records</option><option value="first">1st–15th (this month)</option>
+          <option value="second">16th–end (this month)</option><option value="custom">Custom date range</option>
+        </select></div>
+        <div id="customStartWrap" class="hidden"><label for="startDate">From</label><input id="startDate" type="date"></div>
+        <div id="customEndWrap" class="hidden"><label for="endDate">To</label><input id="endDate" type="date"></div>
+      </div>
+      <div class="actions">
+        <button class="secondary" id="excelBtn" type="button">Export Excel</button>
+        <button class="ghost" id="csvBtn" type="button">Export CSV</button>
+        <button class="ghost" id="printBtn" type="button">Print</button>
+      </div>
+      <div class="actions">
+        <button class="ghost" id="backupBtn" type="button">Download JSON backup</button>
+        <label class="filebtn ghost" for="restoreInput">Restore backup</label><input class="hidden" id="restoreInput" type="file" accept=".json,application/json">
+      </div>
+      <div id="taskList"></div>
+    </section>
+  </div>
+</main>
+<footer>Daily Task Tracker · Local browser storage · Export backups regularly</footer>
+<script>
+(() => {
+  const DB_NAME = 'DailyTaskTrackerDB', STORE = 'tasks';
+  let db, tasks = [], editingId = null;
+  const $ = id => document.getElementById(id);
+  const todayISO = () => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  };
+  const escapeHTML = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  const prettyDate = iso => {
+    if (!iso) return '';
+    const [y,m,d] = iso.split('-').map(Number);
+    return new Date(y,m-1,d).toLocaleDateString('en-PH',{year:'numeric',month:'long',day:'numeric'});
+  };
+  function openDB() {
+    return new Promise((resolve,reject) => {
+      const req = indexedDB.open(DB_NAME,1);
+      req.onupgradeneeded = () => req.result.createObjectStore(STORE,{keyPath:'id'});
+      req.onsuccess = () => resolve(req.result); req.onerror = () => reject(req.error);
+    });
+  }
+  function requestDone(req) {
+    return new Promise((resolve,reject)=>{req.onsuccess=()=>resolve(req.result);req.onerror=()=>reject(req.error);});
+  }
+  async function loadTasks() {
+    const tx=db.transaction(STORE,'readonly');
+    tasks=await requestDone(tx.objectStore(STORE).getAll());
+    tasks.sort((a,b)=>b.date.localeCompare(a.date)||b.createdAt-a.createdAt);
+    render();
+  }
+  async function saveTask(task) {
+    const tx=db.transaction(STORE,'readwrite'); tx.objectStore(STORE).put(task);
+    await new Promise((resolve,reject)=>{tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error);});
+    await loadTasks();
+  }
+  async function deleteTask(id) {
+    const tx=db.transaction(STORE,'readwrite');tx.objectStore(STORE).delete(id);
+    await new Promise((resolve,reject)=>{tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error);});
+    await loadTasks();
+  }
+  function filteredTasks() {
+    const preset=$('periodPreset').value; let start='',end='';
+    const now=new Date(), y=now.getFullYear(), m=now.getMonth();
+    if(preset==='first'){start=`${y}-${String(m+1).padStart(2,'0')}-01`;end=`${y}-${String(m+1).padStart(2,'0')}-15`;}
+    if(preset==='second'){start=`${y}-${String(m+1).padStart(2,'0')}-16`;end=todayISO().slice(0,8)+String(new Date(y,m+1,0).getDate()).padStart(2,'0');}
+    if(preset==='custom'){start=$('startDate').value;end=$('endDate').value;}
+    return tasks.filter(t=>preset==='all'||((!start||t.date>=start)&&(!end||t.date<=end)));
+  }
+  function render() {
+    const today=todayISO(), visible=filteredTasks();
+    $('todayCount').textContent=tasks.filter(t=>t.date===today).length;
+    $('periodCount').textContent=visible.length;
+    const groups={}; visible.forEach(t=>(groups[t.date]??=[]).push(t));
+    const dates=Object.keys(groups).sort((a,b)=>b.localeCompare(a));
+    if(!dates.length){$('taskList').innerHTML='<div class="empty">No tasks found for this period.<br>Add a task or change the date filter.</div>';return;}
+    $('taskList').innerHTML=dates.map(date=>`<div class="day">${escapeHTML(prettyDate(date))} <span class="muted">(${groups[date].length})</span></div>`+
+      groups[date].map(t=>`<div class="task"><div class="tasktext">${escapeHTML(t.text)}</div><div class="taskbuttons"><button class="ghost" data-edit="${t.id}">Edit</button><button class="danger" data-delete="${t.id}">Delete</button></div></div>`).join('')).join('');
+    $('taskList').querySelectorAll('[data-edit]').forEach(b=>b.addEventListener('click',()=>startEdit(b.dataset.edit)));
+    $('taskList').querySelectorAll('[data-delete]').forEach(b=>b.addEventListener('click',async()=>{if(confirm('Delete this task? This cannot be undone.'))await deleteTask(b.dataset.delete);}));
+  }
+  function resetForm(){editingId=null;$('taskForm').reset();$('taskDate').value=todayISO();$('formTitle').textContent='Add a task';$('saveButton').textContent='＋ Save task';$('cancelEdit').classList.add('hidden');}
+  function startEdit(id){const t=tasks.find(x=>x.id===id);if(!t)return;editingId=id;$('taskDate').value=t.date;$('taskText').value=t.text;$('formTitle').textContent='Edit task';$('saveButton').textContent='Save changes';$('cancelEdit').classList.remove('hidden');$('taskDate').scrollIntoView({behavior:'smooth',block:'center'});}
+  $('taskForm').addEventListener('submit',async e=>{e.preventDefault();const date=$('taskDate').value,text=$('taskText').value.trim();if(!date||!text)return;
+    const old=tasks.find(t=>t.id===editingId);
+    await saveTask({id:editingId||crypto.randomUUID(),date,text,createdAt:old?.createdAt||Date.now(),updatedAt:Date.now()});resetForm();});
+  $('cancelEdit').addEventListener('click',resetForm);
+  document.addEventListener('keydown',e=>{if(e.ctrlKey&&e.key==='Enter'&&$('taskText')===document.activeElement)$('taskForm').requestSubmit();});
+  $('periodPreset').addEventListener('change',()=>{const custom=$('periodPreset').value==='custom';$('customStartWrap').classList.toggle('hidden',!custom);$('customEndWrap').classList.toggle('hidden',!custom);render();});
+  $('startDate').addEventListener('change',render);$('endDate').addEventListener('change',render);
+  function download(blob,name){const a=document.createElement('a'),url=URL.createObjectURL(blob);a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}
+  function exportRows(){return filteredTasks().slice().sort((a,b)=>a.date.localeCompare(b.date)||a.createdAt-b.createdAt).map(t=>({Date:t.date,'Task & Client Name':t.text}));}
+  function filename(ext){return `daily-task-report-${todayISO()}.${ext}`;}
+  $('excelBtn').addEventListener('click',()=>{const rows=exportRows();if(!rows.length)return alert('No records to export.');if(!window.XLSX)return alert('Excel export needs an internet connection to load the spreadsheet library. You can use CSV export instead.');
+    const ws=XLSX.utils.json_to_sheet(rows);ws['!cols']=[{wch:16},{wch:90}];const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'Daily Activity Log');XLSX.writeFile(wb,filename('xlsx'));});
+  $('csvBtn').addEventListener('click',()=>{const rows=exportRows();if(!rows.length)return alert('No records to export.');const q=v=>'"'+String(v).replace(/"/g,'""')+'"';const csv=[['Date','Task & Client Name'],...rows.map(r=>[r.Date,r['Task & Client Name']])].map(r=>r.map(q).join(',')).join('\r\n');download(new Blob(['\ufeff'+csv],{type:'text/csv;charset=utf-8'}),filename('csv'));});
+  $('printBtn').addEventListener('click',()=>window.print());
+  $('backupBtn').addEventListener('click',()=>{const backup={app:'Daily Task Tracker',version:1,exportedAt:new Date().toISOString(),tasks};download(new Blob([JSON.stringify(backup,null,2)],{type:'application/json'}),filename('json'));});
+  $('restoreInput').addEventListener('change',async e=>{const file=e.target.files[0];if(!file)return;try{const data=JSON.parse(await file.text());if(!Array.isArray(data.tasks))throw new Error('Invalid backup format.');if(!confirm(`Restore ${data.tasks.length} tasks? Existing records with matching IDs will be updated; other records will be kept.`))return;
+      for(const t of data.tasks){if(!t.id||!t.date||typeof t.text!=='string')continue;await saveTask({id:String(t.id),date:String(t.date),text:t.text,createdAt:Number(t.createdAt)||Date.now(),updatedAt:Date.now()});}
+      alert('Backup restored successfully.');}catch(err){alert('Could not restore backup: '+err.message);}finally{e.target.value='';}});
+  async function init(){ $('todayLabel').textContent=new Date().toLocaleDateString('en-PH',{weekday:'short',year:'numeric',month:'short',day:'numeric'});$('taskDate').value=todayISO();
+    if(!('indexedDB'in window)){alert('This browser does not support IndexedDB. Please use a current version of Chrome, Edge, Firefox, or Safari.');return;}
+    try{db=await openDB();await loadTasks();}catch(err){console.error(err);alert('Unable to open local task storage. Please check your browser settings.');}}
+  init();
+})();
+</script>
+</body>
+</html>
